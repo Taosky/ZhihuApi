@@ -1,4 +1,5 @@
-import os
+import json
+import itertools
 import sqlite3
 import requests
 from flask import Flask, request, session, g, redirect, url_for, abort, \
@@ -11,6 +12,10 @@ app.config['USERNAME'] = 'zxc'
 app.config['PASSWORD'] = 'daily_zxc'
 app.secret_key = 'A0Zr98j/3yX R~XHH!jmN]LWX/,?RT'
 CORS(app)
+
+HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/27.0.1453.94 '
+                  'Safari/537.36'}
 
 
 def get_db():
@@ -47,9 +52,28 @@ def before_request():
     g.db = get_db()
 
 
+def get_article(id):
+    url = 'https://news-at.zhihu.com/api/4/news/{}'.format(id)
+    r = requests.get(url, headers=HEADERS)
+    return json.loads(r.text)
+
+
 def get_latest():
+    url = 'https://news-at.zhihu.com/api/4/news/latest'
+    r = requests.get(url, headers=HEADERS)
+    json_data = json.loads(r.text)
+    date = json_data['date']
+    top_stories = json_data['top_stories']
+    for story in top_stories:
+        article_data = get_article(story['id'])
+        cur = g.db.execute('select id from entries where id=? ', (article_data['id']))
+        if not cur.fetchone():
+            g.db.execute('insert into article (article_id, data) values (?, ?)',
+                         (story['id'], json.dumps(article_data)))
 
 
+def get_before(date_before):
+    url = 'https://news-at.zhihu.com/api/4/news/before/{}'.format(date_before)
 
 
 @app.route('/')
@@ -68,7 +92,6 @@ def add_entry():
     g.db.commit()
     flash('New entry was successfully posted')
     return redirect(url_for('show_entries'))
-
 
 
 if __name__ == '__main__':

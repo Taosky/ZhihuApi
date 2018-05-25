@@ -3,7 +3,6 @@ create table day (
   id integer primary key autoincrement,
   date text not null,
   stories text not null
-
 );
 create table article (
   id integer primary key autoincrement,
@@ -13,5 +12,5 @@ create table article (
 create table day_top (
   id integer primary key autoincrement,
   date text not null,
-  stories text not null,
+  stories text not null
 );
