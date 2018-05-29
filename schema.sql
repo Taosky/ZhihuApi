@@ -1,16 +1,11 @@
 drop table if exists day_date;
 create table day (
   id integer primary key autoincrement,
-  date text not null,
-  stories text not null
+  date text not null UNIQUE,
+  data text not null
 );
 create table article (
   id integer primary key autoincrement,
-  article_id integer,
+  article_id integer UNIQUE,
   data text not null
-);
-create table day_top (
-  id integer primary key autoincrement,
-  date text not null,
-  stories text not null
 );
