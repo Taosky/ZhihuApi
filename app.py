@@ -83,9 +83,16 @@ def get_latest():
                 article_data = get_article(story['id'])
                 db.execute('insert into article (article_id, data) values (?, ?)',
                            (story['id'], json.dumps(article_data)))
-
-        db.execute('insert or replace into day (date,data) values (?, ?)', (str(date), json.dumps(json_data)))
+        cur_day = db.execute('select date from day where date=? ', (str(date),))
+        if not cur_day.fetchone():
+            db.execute('insert into day (date,data) values (?, ?)', (str(date), json.dumps(json_data)))
+            text = 'Inserted'
+        else:
+            db.execute("update day set data = ? where date = ?", (json.dumps(json_data), str(date)))
+            text = 'Updated'
         db.commit()
+        db.close()
+        return text
 
 
 def get_before(date_before):
@@ -104,6 +111,7 @@ def get_before(date_before):
                            (story['id'], json.dumps(article_data)))
 
         db.commit()
+        db.close()
 
 
 @app.route('/v1/day/<date>')
@@ -122,6 +130,12 @@ def show_day(date):
 def show_article(a_id):
     cur = g.db.execute('select data from article where article_id=?', (a_id,))
     return cur.fetchone()[0]
+
+
+@app.route('/v1/update')
+def update():
+    text = get_latest()
+    return text
 
 
 if __name__ == '__main__':
