@@ -1,10 +1,13 @@
+import os
 from datetime import datetime, timedelta
 import json
 import itertools
 import sqlite3
 import requests
 from flask import Flask, request, session, g, redirect, url_for, abort, \
-    render_template, flash
+    render_template, flash, make_response
+import datetime
+import PyRSS2Gen
 from flask_cors import CORS
 
 app = Flask(__name__)
@@ -136,6 +139,46 @@ def show_article(a_id):
 def update():
     text = get_latest()
     return text
+
+
+@app.route('/v1/zhuanlan/<name>/update')
+def update_zhuanlan_rss(name):
+    api = 'https://www.zhihu.com/api/v4/columns/{}/articles'.format(name)
+    data = get_json_data(api)['data']
+
+    items = []
+    for article in data:
+        item = PyRSS2Gen.RSSItem(
+            title=article['title'],
+            link=article['url'],
+            description=article['excerpt'],
+            guid=article['url'],
+            pubDate=datetime.datetime.fromtimestamp(int(article['created'])),
+        )
+        items.append(item)
+
+    rss = PyRSS2Gen.RSS2(
+        title="知乎专栏-{}".format(name),
+        link="https://zhuanlan.zhihu.com/{}".format(name),
+        description="知乎专栏-{}".format(name),
+
+        lastBuildDate=datetime.datetime.now(),
+        items=items)
+
+    rss.write_xml(open('zhuanlan/{}'.format(name), 'w', encoding='utf-8'))
+
+    return 'Updated'
+
+
+@app.route('/v1/zhuanlan/<name>/rss')
+def show_zhuanlan_rss(name):
+    xml_file = 'zhuanlan/{}'.format(name)
+    if not os.path.exists(xml_file):
+        return '404', 404
+
+    resp = make_response(open(xml_file, encoding='utf-8').read())
+    resp.headers["Content-type"] = "application/xml;charset=UTF-8"
+    return resp
 
 
 if __name__ == '__main__':
