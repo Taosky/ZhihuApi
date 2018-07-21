@@ -6,7 +6,6 @@ import sqlite3
 import requests
 from flask import Flask, request, session, g, redirect, url_for, abort, \
     render_template, flash, make_response
-import datetime
 import PyRSS2Gen
 from flask_cors import CORS
 
@@ -182,4 +181,4 @@ def show_zhuanlan_rss(name):
 
 
 if __name__ == '__main__':
-    app.run(port=5661)
+    app.run(host='0.0.0.0',port=5661)
