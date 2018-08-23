@@ -184,8 +184,7 @@ def show_zhuanlan_rss(name):
 @app.route('/v1/webhook', methods=['POST'])
 def webhook():
     secret = 'taoskycn'
-    sha1 = hmac.new(secret.encode(), msg=request.data, digestmod='sha1').hexdigest()
-    if 'X-Hub-Signature' in request.headers and request.headers['X-Hub-Signature'] == 'sha1={}'.format(sha1):
+    if 'X-Hub-Signature' in request.headers and request.headers['X-Hub-Signature'].startswith('sha1='):
         p=Popen('/var/www/Daily/webhook.sh')
         return 'Ok'
     else:
