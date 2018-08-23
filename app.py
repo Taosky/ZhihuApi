@@ -4,10 +4,11 @@ import json
 import itertools
 import sqlite3
 import requests
-from flask import Flask, request, session, g, redirect, url_for, abort, \
-    render_template, flash, make_response
+from flask import Flask, g, make_response
 import PyRSS2Gen
 from flask_cors import CORS
+
+from utils import parse_ymd, replace_unsafe_img
 
 app = Flask(__name__)
 app.config['DATABASE'] = 'daily.db'
@@ -19,11 +20,6 @@ CORS(app)
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/27.0.1453.94 '
                   'Safari/537.36'}
-
-
-def parse_ymd(s):
-    year_s, mon_s, day_s = s[:4], s[4:6], s[6:8]
-    return datetime(int(year_s), int(mon_s), int(day_s))
 
 
 def get_db():
@@ -62,7 +58,8 @@ def before_request():
 
 def get_json_data(url):
     r = requests.get(url, headers=HEADERS)
-    return json.loads(r.text)
+    text = replace_unsafe_img(r.text)
+    return json.loads(text)
 
 
 def get_article(_id):
@@ -181,4 +178,4 @@ def show_zhuanlan_rss(name):
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0',port=5661)
+    app.run(host='0.0.0.0', port=5661)
