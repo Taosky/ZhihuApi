@@ -4,7 +4,8 @@ import json
 import itertools
 import sqlite3
 import requests
-from flask import Flask, g, make_response
+from flask import Flask, g, make_response, request
+import hashlib
 import PyRSS2Gen
 from flask_cors import CORS
 
@@ -175,6 +176,17 @@ def show_zhuanlan_rss(name):
     resp = make_response(open(xml_file, encoding='utf-8').read())
     resp.headers["Content-type"] = "application/xml;charset=UTF-8"
     return resp
+
+
+@app.route('/v1/webhook', methods=['POST'])
+def webhook():
+    secret = 'taoskycn'
+    if 'X-Hub-Signature' in request.headers and request.headers['X-Hub-Signature'] == hashlib.sha1(
+            secret.encode()).hexdigest():
+        os.system('/var/www/Daily/webhook.sh')
+        return 'Ok'
+    else:
+        return 'Forbidden', 403
 
 
 if __name__ == '__main__':
