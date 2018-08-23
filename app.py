@@ -1,8 +1,11 @@
+import hmac
 import os
 from datetime import datetime, timedelta
 import json
 import itertools
 import sqlite3
+from subprocess import Popen
+
 import requests
 from flask import Flask, g, make_response, request
 import hashlib
@@ -181,12 +184,12 @@ def show_zhuanlan_rss(name):
 @app.route('/v1/webhook', methods=['POST'])
 def webhook():
     secret = 'taoskycn'
-    if 'X-Hub-Signature' in request.headers and request.headers['X-Hub-Signature'] == hashlib.sha1(
-            secret.encode()).hexdigest():
-        os.system('/var/www/Daily/webhook.sh')
+    sha1 = hmac.new(secret.encode(), msg=request.data, digestmod='sha1').hexdigest()
+    if 'X-Hub-Signature' in request.headers and request.headers['X-Hub-Signature'] == 'sha1={}'.format(sha1):
+        p=Popen('/var/www/Daily/webhook.sh')
         return 'Ok'
     else:
-        return 'Forbidden', 403
+        return 'Forbidden.', 403
 
 
 if __name__ == '__main__':
