@@ -7,4 +7,4 @@ def parse_ymd(s):
 
 
 def replace_unsafe_img(text):
-    text.replace('http://pic', 'https://pic')
+    return text.replace('http://pic', 'https://pic')

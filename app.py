@@ -1,4 +1,3 @@
-import hmac
 import os
 from datetime import datetime, timedelta
 import json
@@ -8,7 +7,6 @@ from subprocess import Popen
 
 import requests
 from flask import Flask, g, make_response, request
-import hashlib
 import PyRSS2Gen
 from flask_cors import CORS
 
@@ -153,7 +151,7 @@ def update_zhuanlan_rss(name):
             link=article['url'],
             description=article['excerpt'],
             guid=article['url'],
-            pubDate=datetime.datetime.fromtimestamp(int(article['created'])),
+            pubDate=datetime.fromtimestamp(int(article['created'])),
         )
         items.append(item)
 
@@ -162,7 +160,7 @@ def update_zhuanlan_rss(name):
         link="https://zhuanlan.zhihu.com/{}".format(name),
         description="知乎专栏-{}".format(name),
 
-        lastBuildDate=datetime.datetime.now(),
+        lastBuildDate=datetime.now(),
         items=items)
 
     rss.write_xml(open('zhuanlan/{}'.format(name), 'w', encoding='utf-8'))
