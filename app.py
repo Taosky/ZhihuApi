@@ -1,171 +1,128 @@
 import os
 from datetime import datetime, timedelta
 import json
-import itertools
-import sqlite3
 from subprocess import Popen
-
-import requests
-from flask import Flask, g, make_response, request
+from config import ZHUANLAN_LIST
+from flask import Flask, make_response, request
 import PyRSS2Gen
 from flask_cors import CORS
-
-from utils import parse_ymd, replace_unsafe_img
+from utils import parse_ymd, get_json_data, get_article_type
+from database import db_session
+from models import Author, Day, Article, Comment, ArticleAuthor
+from bs4 import BeautifulSoup
 
 app = Flask(__name__)
-app.config['DATABASE'] = 'daily.db'
-app.config['USERNAME'] = 'zxc'
-app.config['PASSWORD'] = 'daily_zxc'
-app.secret_key = 'A0Zr98j/3yX R~XHH!jmN]LWX/,?RT'
 CORS(app)
 
-HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/27.0.1453.94 '
-                  'Safari/537.36'}
 
-
-def get_db():
-    if not hasattr(g, 'sqlite_db'):
-        g.sqlite_db = connect_db()
-    return g.sqlite_db
-
-
-# 应用环境销毁时执行
 @app.teardown_appcontext
-def close_db(error):
-    if hasattr(g, 'sqlite_db'):
-        g.sqlite_db.close()
+def shutdown_session(exception=None):
+    db_session.remove()
 
 
-def connect_db():
-    rv = sqlite3.connect(app.config['DATABASE'])
-    rv.row_factory = sqlite3.Row
-    return rv
+# 添加作者到数据库
+def add_author(authors):
+    for author in authors:
+        if Author.query.filter_by(name=author[0]).count() == 0:
+            new_author = Author(name=author[0], avatar=author[1], bio=author[2])
+            db_session.add(new_author)
 
 
-def init_db():
-    with app.app_context():
-        # 建立了应用环境
-        db = get_db()
-        with app.open_resource('schema.sql', mode='r') as f:
-            db.cursor().executescript(f.read())
-        db.commit()
-        # 释放关联并执行销毁函数
+# 添加评论到数据库
+def add_comments(comments):
+    for comment in comments:
+        if Comment.query.filter_by(id=comment['id']).count() == 0:
+            new_comment = Comment(id=comment['id'], author=comment['author'], content=comment['content'],
+                                  likes=comment['likes'], time=comment['time'],
+                                  reply_to=comment['reply_to']['id'] if 'reply_to' in comment and 'id' in comment[
+                                      'reply_to'] else 0)
+            db_session.add(new_comment)
 
 
-@app.before_request
-def before_request():
-    g.db = get_db()
+# 获取文章html内的信息
+def get_article_authors(html):
+    soup = BeautifulSoup(html, 'html.parser')
+    author_names = [node.get_text().strip('，。') for node in soup.find_all('span', class_='author')]
+    author_avatars = [node['src'] for node in soup.find_all('img', class_='avatar')]
+    # 作者信息
+    authors = [(author_names[i], author_avatars[i], '') for i in range(len(author_names))]
+    return authors
 
 
-def get_json_data(url):
-    r = requests.get(url, headers=HEADERS)
-    text = replace_unsafe_img(r.text)
-    return json.loads(text)
+# 获取并添加评论到数据库
+def get_article_comments(article_id):
+    short_comments_api = 'https://news-at.zhihu.com/api/4/story/{}/short-comments'.format(article_id)
+    long_comments_api = 'https://news-at.zhihu.com/api/4/story/{}/long-comments'.format(article_id)
+    comments = get_json_data(short_comments_api)['comments'] + get_json_data(long_comments_api)['comments']
+
+    authors = [(comment['author'], comment['avatar'], '') for comment in comments]
+
+    return comments, authors
 
 
-def get_article(_id):
-    url = 'https://news-at.zhihu.com/api/4/news/{}'.format(_id)
-    return get_json_data(url)
-
-
-def get_latest():
-    with app.app_context():
-        # 建立了应用环境
-        db = get_db()
-        url = 'https://news-at.zhihu.com/api/4/news/latest'
-        json_data = get_json_data(url)
-        date = json_data['date']
-        top_stories = json_data['top_stories']
-        stories = json_data['stories']
-        for story in itertools.chain(top_stories, stories):
-            cur = db.execute('select id from article where article_id=? ', (story['id'],))
-            if not cur.fetchone():
-                article_data = get_article(story['id'])
-                db.execute('insert into article (article_id, data) values (?, ?)',
-                           (story['id'], json.dumps(article_data)))
-        cur_day = db.execute('select date from day where date=? ', (str(date),))
-        if not cur_day.fetchone():
-            db.execute('insert into day (date,data) values (?, ?)', (str(date), json.dumps(json_data)))
-            text = 'Inserted'
-        else:
-            db.execute("update day set data = ? where date = ?", (json.dumps(json_data), str(date)))
-            text = 'Updated'
-        db.commit()
-        db.close()
-        return text
-
-
+# 获取指定日期内容
 def get_before(date_before):
-    with app.app_context():
-        db = get_db()
-        url = 'https://news-at.zhihu.com/api/4/news/before/{}'.format(date_before)
-        json_data = get_json_data(url)
-        date = json_data['date']
-        db.execute('insert or replace into day (date, data) values (?, ?)', (date, json.dumps(json_data)))
+    url = 'https://news-at.zhihu.com/api/4/news/before/{}'.format(date_before)
+    json_data = get_json_data(url)
+    date = json_data['date']
+    day_query = Day.query.filter_by(date=date)
+    if day_query.count() == 0:
+        new_day = Day(date=date, data=json.dumps(json_data), update=datetime.now())
+        db_session.add(new_day)
+    else:
+        day_query.update({'data': json.dumps(json_data), 'update': datetime.now()})
 
-        for story in json_data['stories']:
-            cur = db.execute('select id from article where article_id=? ', (story['id'],))
-            if not cur.fetchone():
-                article_data = get_article(story['id'])
-                db.execute('insert into article (article_id, data) values (?, ?)',
-                           (story['id'], json.dumps(article_data)))
+    all_comments = []
+    all_authors = set()
 
-        db.commit()
-        db.close()
+    for story in json_data['stories']:
+        if Article.query.filter_by(id=story['id']).count() == 0:
+            api_url = 'https://news-at.zhihu.com/api/4/news/{}'.format(story['id'])
+            article_data = get_json_data(api_url)
+            article_authors = get_article_authors(article_data['body'])
+            comments, comment_authors = get_article_comments(story['id'])
+            article_type = get_article_type(article_data['title'])
+
+            # 文章
+            new_article = Article(id=story['id'], title=article_data['title'], date=date, url=article_data['share_url'],
+                                  image=article_data['image'], type=article_type, data=json.dumps(article_data))
+            db_session.add(new_article)
+
+            # 评论
+            for one_comment in comments:
+                all_comments.append(one_comment)
+
+            # 作者
+            for one_author in (article_authors + comment_authors):
+                all_authors.add(one_author)
+
+            # 文章和作者
+            for one_author in article_authors:
+                new_article_author = ArticleAuthor(article_id=story['id'], author=one_author[0])
+                db_session.add(new_article_author)
+
+    add_author(all_authors)
+    add_comments(all_comments)
+
+    db_session.commit()
+
+
+@app.route('/')
+def index():
+    return 'Forbidden', 403
 
 
 @app.route('/v1/day/<date>')
 def show_day(date):
-    cur = g.db.execute('select data from day where date=?', (date,))
-    r = cur.fetchone()
-    if r:
-        return r[0]
-    before_date = (parse_ymd(date) + timedelta(days=1)).strftime('%Y%m%d')
-    get_before(before_date)
-    cur = g.db.execute('select data from day where date=?', (date,))
-    return cur.fetchone()[0]
+    if Day.query.filter_by(date=date).count() == 0:
+        before_date = (parse_ymd(date) + timedelta(days=1)).strftime('%Y%m%d')
+        get_before(before_date)
+    return Day.query.filter_by(date=date).first().data
 
 
 @app.route('/v1/article/<a_id>')
 def show_article(a_id):
-    cur = g.db.execute('select data from article where article_id=?', (a_id,))
-    return cur.fetchone()[0]
-
-
-@app.route('/v1/update')
-def update():
-    text = get_latest()
-    return text
-
-
-@app.route('/v1/zhuanlan/<name>/update')
-def update_zhuanlan_rss(name):
-    api = 'https://www.zhihu.com/api/v4/columns/{}/articles'.format(name)
-    data = get_json_data(api)['data']
-
-    items = []
-    for article in data:
-        item = PyRSS2Gen.RSSItem(
-            title=article['title'],
-            link=article['url'],
-            description=article['excerpt'],
-            guid=article['url'],
-            pubDate=datetime.fromtimestamp(int(article['created'])),
-        )
-        items.append(item)
-
-    rss = PyRSS2Gen.RSS2(
-        title="知乎专栏-{}".format(name),
-        link="https://zhuanlan.zhihu.com/{}".format(name),
-        description="知乎专栏-{}".format(name),
-
-        lastBuildDate=datetime.now(),
-        items=items)
-
-    rss.write_xml(open('zhuanlan/{}'.format(name), 'w', encoding='utf-8'))
-
-    return 'Updated'
+    return Article.query.filter_by(id=a_id).first().data
 
 
 @app.route('/v1/zhuanlan/<name>/rss')
@@ -179,14 +136,62 @@ def show_zhuanlan_rss(name):
     return resp
 
 
+# Github Webhook 用于前端更新
 @app.route('/v1/webhook', methods=['POST'])
 def webhook():
-    secret = 'taoskycn'
     if 'X-Hub-Signature' in request.headers and request.headers['X-Hub-Signature'].startswith('sha1='):
-        p=Popen('/var/www/Daily/webhook.sh')
+        p = Popen('/var/www/Daily/webhook.sh')
         return 'Ok'
     else:
         return 'Forbidden.', 403
+
+
+def update_zhuanlan_rss():
+    print('Start update zhuanlan rss...')
+    for name in ZHUANLAN_LIST:
+        api = 'https://www.zhihu.com/api/v4/columns/{}/articles'.format(name)
+        data = get_json_data(api)['data']
+
+        items = []
+        for article in data:
+            item = PyRSS2Gen.RSSItem(
+                title=article['title'],
+                link=article['url'],
+                description=article['excerpt'],
+                guid=article['url'],
+                pubDate=datetime.fromtimestamp(int(article['created'])),
+            )
+            items.append(item)
+
+        rss = PyRSS2Gen.RSS2(
+            title="知乎专栏-{}".format(name),
+            link="https://zhuanlan.zhihu.com/{}".format(name),
+            description="知乎专栏-{}".format(name),
+
+            lastBuildDate=datetime.now(),
+            items=items)
+
+        rss.write_xml(open('zhuanlan/{}'.format(name), 'w', encoding='utf-8'))
+
+        print('Finished zhuanlan update.')
+
+
+def update_daily():
+    print('Start update daily...')
+    # 23点后更新今天的内容
+    if datetime.now().hour > 23:
+        date_before = (datetime.now() + timedelta(days=1)).strftime('%Y%m%d')
+    # 其他时间更新昨天的内容
+    else:
+        date_before = datetime.now().strftime('%Y%m%d')
+    get_before(date_before)
+    print('Finished daily update.')
+
+
+def update():
+    update_daily()
+    update_zhuanlan_rss()
+    print('\nAll updated')
 
 
 if __name__ == '__main__':
