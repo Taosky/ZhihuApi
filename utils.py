@@ -13,14 +13,9 @@ def parse_ymd(s):
     return datetime(int(year_s), int(mon_s), int(day_s))
 
 
-def replace_unsafe_img(text):
-    return text.replace('http:\\/\\/pic', 'https:\\/\\/pic')
-
-
 def get_json_data(url):
     r = requests.get(url, headers=HEADERS)
-    text = replace_unsafe_img(r.text)
-    return json.loads(text)
+    return json.loads(r.text)
 
 
 def get_article_type(title):
