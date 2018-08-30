@@ -1,3 +1,4 @@
+# coding:utf-8
 from sqlalchemy import Column, Integer, String, DateTime, BigInteger
 from sqlalchemy.dialects.mysql import MEDIUMTEXT
 from database import Base
