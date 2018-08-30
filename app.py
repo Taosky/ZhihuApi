@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import json
 from subprocess import Popen
 from config import ZHUANLAN_LIST
+from sqlalchemy import desc
 from flask import Flask, make_response, request
 import PyRSS2Gen
 from flask_cors import CORS
@@ -43,8 +44,9 @@ def add_comments(comments):
         else:
             comment_ids.add(comment['id'])
         if Comment.query.filter_by(id=comment['id']).count() == 0:
-            new_comment = Comment(id=comment['id'], author=comment['author'], content=comment['content'],
-                                  likes=comment['likes'], time=comment['time'],
+            new_comment = Comment(id=comment['id'], author=comment['author'], type=comment['type'],
+                                  article_id=comment['article_id'], content=comment['content'], likes=comment['likes'],
+                                  time=comment['time'],
                                   reply_to=comment['reply_to']['id'] if 'reply_to' in comment and 'id' in comment[
                                       'reply_to'] else 0)
             db_session.add(new_comment)
@@ -63,8 +65,20 @@ def get_article_authors(html):
 # 获取并添加评论到数据库
 def get_article_comments(article_id):
     short_comments_api = 'https://news-at.zhihu.com/api/4/story/{}/short-comments'.format(article_id)
+    short_comments = []
+    for comment in get_json_data(short_comments_api)['comments']:
+        comment['type'] = 'short'
+        comment['article_id'] = article_id
+        short_comments.append(comment)
+
     long_comments_api = 'https://news-at.zhihu.com/api/4/story/{}/long-comments'.format(article_id)
-    comments = get_json_data(short_comments_api)['comments'] + get_json_data(long_comments_api)['comments']
+    long_comments = []
+    for comment in get_json_data(long_comments_api)['comments']:
+        comment['type'] = 'long'
+        comment['article_id'] = article_id
+        long_comments.append(comment)
+
+    comments = short_comments + long_comments
 
     authors = [(comment['author'], comment['avatar'], '') for comment in comments]
 
@@ -123,6 +137,11 @@ def index():
     return 'Forbidden', 403
 
 
+@app.route('/v1')
+def v1():
+    return 'Version 1'
+
+
 @app.route('/v1/day/<date>')
 def show_day(date):
     if Day.query.filter_by(date=date).count() == 0:
@@ -134,6 +153,75 @@ def show_day(date):
 @app.route('/v1/article/<a_id>')
 def show_article(a_id):
     return Article.query.filter_by(id=a_id).first().data
+
+
+@app.route('/v1/author/<name>')
+def show_author(name):
+    author = Author.query.filter_by(name=name).first()
+    author_dict = author.__dict__
+    del author_dict['_sa_instance_state']
+    return json.dumps(author_dict)
+
+
+@app.route('/v1/comment/<int:c_id>')
+def show_comment(c_id):
+    comment = Comment.query.filter_by(id=c_id)
+    comment_dict = comment.__dict__
+    del comment_dict['_sa_instance_state']
+    return json.dumps(comment_dict)
+
+
+@app.route('/v1/article/search', methods=['POST'])
+def search_article():
+    args = request.get_json()
+    keyword = args['query'] if 'query' in args else ''
+    like_str = '%{}%'.format(keyword)
+    author = args['author'] if 'author' in args else ''
+    a_type = args['type'] if 'type' in args else ''
+    order_by = Article.type if 'order_by' in args and args['order_by'] == 'type' else Article.date
+
+    if author:
+        query_request = Article.query.join(ArticleAuthor, Article.id == ArticleAuthor.article_id).filter(
+            ArticleAuthor.author == author, Article.title.ilike(like_str))
+    else:
+        query_request = Article.query.filter(Article.title.ilike(like_str))
+    if a_type:
+        query_request = query_request.filter(Article.type == a_type)
+    # 排序
+    query_request = query_request.order_by(desc(order_by))
+
+    result = []
+    for article in query_request:
+        article_dict = article.__dict__
+        del article_dict['_sa_instance_state']
+        result.append(article_dict)
+    return json.dumps(result)
+
+
+@app.route('/v1/comment/search', methods=['POST'])
+def search_comment():
+    args = request.get_json()
+    a_id = int(args['article_id']) if 'article_id' in args else ''
+    author = args['author'] if 'author' in args else ''
+    c_type = args['type'] if 'type' in args else ''
+    order_by = Comment.time if 'order_by' in args and args['order_by'] == 'time' else Comment.likes
+
+    query_request = Comment.query
+    if a_id:
+        query_request = query_request.filter(Comment.article_id == a_id)
+    if author:
+        query_request = query_request.filter(Comment.author == author)
+    if c_type:
+        query_request = query_request.filter(Comment.type == c_type)
+    # 排序
+    query_request = query_request.order_by(desc(order_by))
+
+    result = []
+    for comment in query_request:
+        comment_dict = comment.__dict__
+        del comment_dict['_sa_instance_state']
+        result.append(comment_dict)
+    return json.dumps(result)
 
 
 @app.route('/v1/zhuanlan/<name>/rss')

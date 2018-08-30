@@ -26,8 +26,10 @@ class Article(Base):
 class Comment(Base):
     __tablename__ = 'comment'
     id = Column(BigInteger, primary_key=True)
+    article_id = Column(BigInteger)
     author = Column(String(100))
     content = Column(MEDIUMTEXT)
+    type = Column(String(10))
     likes = Column(Integer)
     time = Column(BigInteger)
     reply_to = Column(BigInteger)
