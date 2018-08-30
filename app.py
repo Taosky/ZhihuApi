@@ -23,7 +23,12 @@ def shutdown_session(exception=None):
 
 # 添加作者到数据库
 def add_author(authors):
+    author_names = set()
     for author in authors:
+        if author[0] in author_names:
+            continue
+        else:
+            author_names.add(author[0])
         if Author.query.filter_by(name=author[0]).count() == 0:
             new_author = Author(name=author[0], avatar=author[1], bio=author[2])
             db_session.add(new_author)
@@ -31,7 +36,12 @@ def add_author(authors):
 
 # 添加评论到数据库
 def add_comments(comments):
+    comment_ids = set()
     for comment in comments:
+        if comment['id'] in comment_ids:
+            continue
+        else:
+            comment_ids.add(comment['id'])
         if Comment.query.filter_by(id=comment['id']).count() == 0:
             new_comment = Comment(id=comment['id'], author=comment['author'], content=comment['content'],
                                   likes=comment['likes'], time=comment['time'],
@@ -74,7 +84,7 @@ def get_before(date_before):
         day_query.update({'data': json.dumps(json_data), 'update': datetime.now()})
 
     all_comments = []
-    all_authors = set()
+    all_authors = []
 
     for story in json_data['stories']:
         if Article.query.filter_by(id=story['id']).count() == 0:
@@ -95,7 +105,7 @@ def get_before(date_before):
 
             # 作者
             for one_author in (article_authors + comment_authors):
-                all_authors.add(one_author)
+                all_authors.append(one_author)
 
             # 文章和作者
             for one_author in article_authors:
