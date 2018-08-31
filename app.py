@@ -224,17 +224,6 @@ def search_comment():
     return json.dumps(result)
 
 
-@app.route('/v1/zhuanlan/<name>/rss')
-def show_zhuanlan_rss(name):
-    xml_file = 'zhuanlan/{}'.format(name)
-    if not os.path.exists(xml_file):
-        return '404', 404
-
-    resp = make_response(open(xml_file, encoding='utf-8').read())
-    resp.headers["Content-type"] = "application/xml;charset=UTF-8"
-    return resp
-
-
 # Github Webhook 用于前端更新
 @app.route('/v1/webhook', methods=['POST'])
 def webhook():
@@ -243,36 +232,6 @@ def webhook():
         return 'Ok'
     else:
         return 'Forbidden.', 403
-
-
-def update_zhuanlan_rss():
-    print('Start update zhuanlan rss...')
-    for name in ZHUANLAN_LIST:
-        api = 'https://www.zhihu.com/api/v4/columns/{}/articles'.format(name)
-        data = get_json_data(api)['data']
-
-        items = []
-        for article in data:
-            item = PyRSS2Gen.RSSItem(
-                title=article['title'],
-                link=article['url'],
-                description=article['excerpt'],
-                guid=article['url'],
-                pubDate=datetime.fromtimestamp(int(article['created'])),
-            )
-            items.append(item)
-
-        rss = PyRSS2Gen.RSS2(
-            title="知乎专栏-{}".format(name),
-            link="https://zhuanlan.zhihu.com/{}".format(name),
-            description="知乎专栏-{}".format(name),
-
-            lastBuildDate=datetime.now(),
-            items=items)
-
-        rss.write_xml(open('zhuanlan/{}'.format(name), 'w', encoding='utf-8'))
-
-        print('Finished zhuanlan update.')
 
 
 def update_daily():
@@ -289,7 +248,6 @@ def update_daily():
 
 def update():
     update_daily()
-    update_zhuanlan_rss()
     print('\nAll updated')
 
 
