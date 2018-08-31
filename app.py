@@ -220,6 +220,7 @@ def search_comment():
     for comment in query_request:
         comment_dict = comment.__dict__
         del comment_dict['_sa_instance_state']
+        comment_dict['avatar'] = Author.query.filter(Author.name == comment_dict['author']).first().avatar
         result.append(comment_dict)
     return json.dumps(result)
 
