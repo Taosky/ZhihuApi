@@ -1,12 +1,9 @@
 # coding:utf-8
-import os
 from datetime import datetime, timedelta
 import json
 from subprocess import Popen
-from config import ZHUANLAN_LIST
 from sqlalchemy import desc
-from flask import Flask, make_response, request
-import PyRSS2Gen
+from flask import Flask, request
 from flask_cors import CORS
 from utils import parse_ymd, get_json_data, get_article_type
 from database import db_session
@@ -179,6 +176,10 @@ def search_article():
     author = args['author'] if 'author' in args else ''
     a_type = args['type'] if 'type' in args else ''
     order_by = Article.type if 'order_by' in args and args['order_by'] == 'type' else Article.date
+    # start_time = args['start_time'] if 'start_time' in args else ''
+    # end_time = args['end_time'] if 'end_time' in args else ''
+    page = args['page'] if 'page' in args else 1
+    page_size = 15
 
     if author:
         query_request = Article.query.join(ArticleAuthor, Article.id == ArticleAuthor.article_id).filter(
@@ -187,8 +188,13 @@ def search_article():
         query_request = Article.query.filter(Article.title.ilike(like_str))
     if a_type:
         query_request = query_request.filter(Article.type == a_type)
-    # 排序
-    query_request = query_request.order_by(desc(order_by))
+
+    # if start_time and end_time:
+    #     start_datetime = datetime.strptime(start_time, '%Y%m%d %H:%M:%S')
+    #     end_datetime = datetime.strptime(end_time, '%Y%m%d %H:%M:%S')
+    #     query_request = query_request.filter(start_datetime < datetime.strptime(Article.date, '%Y%m%d') < end_datetime)
+    # 排序分页
+    query_request = query_request.order_by(desc(order_by)).offset((page - 1) * page_size).limit(page_size).all()
 
     result = []
     for article in query_request:
@@ -205,6 +211,8 @@ def search_comment():
     author = args['author'] if 'author' in args else ''
     c_type = args['type'] if 'type' in args else ''
     order_by = Comment.time if 'order_by' in args and args['order_by'] == 'time' else Comment.likes
+    page = args['page'] if 'page' in args else 1
+    page_size = 15
 
     query_request = Comment.query
     if a_id:
@@ -214,7 +222,7 @@ def search_comment():
     if c_type:
         query_request = query_request.filter(Comment.type == c_type)
     # 排序
-    query_request = query_request.order_by(desc(order_by))
+    query_request = query_request.order_by(desc(order_by)).offset((page - 1) * page_size).limit(page_size).all()
 
     result = []
     for comment in query_request:
