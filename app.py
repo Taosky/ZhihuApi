@@ -188,19 +188,15 @@ def search_article():
         query_request = Article.query.filter(Article.title.ilike(like_str))
     if a_type:
         query_request = query_request.filter(Article.type == a_type)
-
-    # if start_time and end_time:
-    #     start_datetime = datetime.strptime(start_time, '%Y%m%d %H:%M:%S')
-    #     end_datetime = datetime.strptime(end_time, '%Y%m%d %H:%M:%S')
-    #     query_request = query_request.filter(start_datetime < datetime.strptime(Article.date, '%Y%m%d') < end_datetime)
     # 排序分页
-    query_request = query_request.order_by(desc(order_by)).offset((page - 1) * page_size).limit(page_size).all()
 
-    result = []
-    for article in query_request:
+    result = {'articles': [], 'total': query_request.count(), 'page': page, 'page_size': page_size}
+    for article in query_request.order_by(desc(order_by)).offset((page - 1) * page_size).limit(page_size):
         article_dict = article.__dict__
+        article_dict['authors'] = [one.author for one in
+                                   ArticleAuthor.query.filter(ArticleAuthor.article_id == article_dict['id'])]
         del article_dict['_sa_instance_state']
-        result.append(article_dict)
+        result['articles'].append(article_dict)
     return json.dumps(result)
 
 
@@ -212,7 +208,7 @@ def search_comment():
     c_type = args['type'] if 'type' in args else ''
     order_by = Comment.time if 'order_by' in args and args['order_by'] == 'time' else Comment.likes
     page = args['page'] if 'page' in args else 1
-    page_size = 15
+    page_size = 20
 
     query_request = Comment.query
     if a_id:
@@ -221,15 +217,13 @@ def search_comment():
         query_request = query_request.filter(Comment.author == author)
     if c_type:
         query_request = query_request.filter(Comment.type == c_type)
-    # 排序
-    query_request = query_request.order_by(desc(order_by)).offset((page - 1) * page_size).limit(page_size).all()
 
-    result = []
-    for comment in query_request:
+    result = {'comments': [], 'total': query_request.count(), 'page': page, 'page_size': page_size}
+    for comment in query_request.order_by(desc(order_by)).offset((page - 1) * page_size).limit(page_size):
         comment_dict = comment.__dict__
         del comment_dict['_sa_instance_state']
         comment_dict['avatar'] = Author.query.filter(Author.name == comment_dict['author']).first().avatar
-        result.append(comment_dict)
+        result['comments'].append(comment_dict)
     return json.dumps(result)
 
 
