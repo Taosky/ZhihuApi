@@ -9,6 +9,7 @@ from utils import parse_ymd, get_json_data, get_article_type
 from database import db_session
 from models import Author, Day, Article, Comment, ArticleAuthor
 from bs4 import BeautifulSoup
+from config import WEBHOOK_RUN
 
 app = Flask(__name__)
 CORS(app)
@@ -162,7 +163,7 @@ def show_author(name):
 
 @app.route('/v1/comment/<int:c_id>')
 def show_comment(c_id):
-    comment = Comment.query.filter_by(id=c_id)
+    comment = Comment.query.filter_by(id=c_id).first()
     comment_dict = comment.__dict__
     del comment_dict['_sa_instance_state']
     return json.dumps(comment_dict)
@@ -231,7 +232,7 @@ def search_comment():
 @app.route('/v1/webhook', methods=['POST'])
 def webhook():
     if 'X-Hub-Signature' in request.headers and request.headers['X-Hub-Signature'].startswith('sha1='):
-        p = Popen('/var/www/Daily/webhook.sh')
+        p = Popen(WEBHOOK_RUN)
         return 'Ok'
     else:
         return 'Forbidden.', 403
