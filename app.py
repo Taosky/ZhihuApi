@@ -228,16 +228,6 @@ def search_comment():
     return json.dumps(result)
 
 
-# Github Webhook 用于前端更新
-@app.route('/v1/webhook', methods=['POST'])
-def webhook():
-    if 'X-Hub-Signature' in request.headers and request.headers['X-Hub-Signature'].startswith('sha1='):
-        p = Popen(WEBHOOK_RUN)
-        return 'Ok'
-    else:
-        return 'Forbidden.', 403
-
-
 def update_daily():
     print('Start update daily...')
     # 23点后更新今天的内容
