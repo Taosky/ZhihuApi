@@ -1,7 +1,6 @@
 # coding:utf-8
 from datetime import datetime, timedelta
 import json
-from subprocess import Popen
 from sqlalchemy import desc
 from flask import Flask, request
 from flask_cors import CORS
@@ -9,7 +8,6 @@ from utils import parse_ymd, get_json_data, get_article_type
 from database import db_session
 from models import Author, Day, Article, Comment, ArticleAuthor
 from bs4 import BeautifulSoup
-from config import WEBHOOK_RUN
 
 app = Flask(__name__)
 CORS(app)
@@ -108,7 +106,8 @@ def get_before(date_before):
 
             # 文章
             new_article = Article(id=story['id'], title=article_data['title'], date=date, url=article_data['share_url'],
-                                  image=article_data['image'], type=article_type, data=json.dumps(article_data))
+                                  image=article_data['image'] if 'image' in article_data else '', type=article_type,
+                                  data=json.dumps(article_data))
             db_session.add(new_article)
 
             # 评论
