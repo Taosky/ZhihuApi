@@ -2,7 +2,7 @@
 from flask import Flask, request
 from flask_cors import CORS
 
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 from database import db_session
 from models import Author, Day, Article, Comment, ArticleAuthor
 
@@ -74,14 +74,21 @@ def search_article():
 
     if author:
         query_request = Article.query.join(ArticleAuthor, Article.id == ArticleAuthor.article_id).filter(
-            ArticleAuthor.author == author, Article.title.ilike(like_str))
+            ArticleAuthor.author == author, Article.title.contains(like_str))
+        total_query = db_session.query(func.count(Article.id)).join(ArticleAuthor,
+                                                                    Article.id == ArticleAuthor.article_id).filter(
+            ArticleAuthor.author == author, Article.title.contains(like_str))
     else:
-        query_request = Article.query.filter(Article.title.ilike(like_str))
+        query_request = Article.query.filter(Article.title.contains(like_str))
+        total_query = db_session.query(func.count(Article.id)).filter(Article.title.contains(like_str))
     if a_type:
         query_request = query_request.filter(Article.type == a_type)
+        total_query = total_query.filter(Article.type == a_type)
     # 排序分页
 
-    result = {'articles': [], 'total': query_request.count(), 'page': page, 'page_size': page_size}
+    total = total_query.first()[0]
+
+    result = {'articles': [], 'total': total, 'page': page, 'page_size': page_size}
     for article in query_request.order_by(desc(order_by)).offset((page - 1) * page_size).limit(page_size):
         article_dict = article.__dict__
         article_dict['authors'] = [one.author for one in
