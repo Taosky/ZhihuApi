@@ -160,3 +160,7 @@ def update_daily():
         date_before = datetime.now().strftime('%Y%m%d')
     start_before(date_before)
     print('Finished daily update.')
+
+
+if __name__ == '__main__':
+    update_daily()
